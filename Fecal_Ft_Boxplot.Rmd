@@ -1,0 +1,277 @@
+---
+title: "Fecal_Ft_Boxplot"
+author: "Olivia Schwartz"
+date: "2024-12-04"
+output: html_document
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+library(ggplot2)
+library("ggpubr")
+library(grid)  #Plot text annotation
+library(viridis)
+library(RColorBrewer)
+library(purrr)
+library(rlang)
+```
+#Inputs
+```{r}
+# (1) Quant table (.csv)
+#     As produced by mzmine
+# (2) Metadata (.csv)
+#     1st col: file names
+
+quant_table <- read.csv("20241106_fecal_quant_batchcorrected.csv", sep = ",") #mzmine output
+metadata <- read.csv('20241106_metadata_fecal_batch_wk.csv', header = T, check.names = F, sep = ",")
+plot_ft <- "FT49417"
+plot_title <- plot_ft
+```
+#Changing naming in data frames
+```{r}
+#Metadata
+colnames(metadata)<-gsub("ATTRIBUTE_","",colnames(metadata)) #Remove "ATTRIBUTE_"
+colnames(metadata)[1] <- "filename"
+#Feature Table
+colnames(quant_table)<-gsub(".Peak.area","",colnames(quant_table)) #Remove ".Peak.area." 
+colnames(quant_table)[1] <- "ID"
+quant_table <- quant_table[-c(4:13)] #Retain only ID, mz, RT
+colnames(quant_table)[2] <- "mz"
+colnames(quant_table)[3] <- "rt"
+
+#QC-Do file names match?
+setdiff(metadata$filename, colnames(quant_table))
+setdiff(colnames(quant_table), metadata$filename)
+```
+#Merging feature IDs with metadata for plotting
+```{r}
+
+quant_ft <- t(quant_table)
+quant_ft <- as.data.frame(quant_ft)
+colnames(quant_ft) <- quant_ft[1,]
+
+filename <- row.names(quant_ft)
+quant_ft <- cbind(filename, quant_ft)
+quant_ft <- quant_ft[-c(1:3), ]   # notice the -
+data_merge <- inner_join(metadata, quant_ft)
+```
+#Setting up merged data for plotting
+```{r}
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(ncol(metadata)+1), as.numeric)
+
+startcol <- ncol(metadata)+1
+colnames(data_merge)[startcol:ncol(data_merge)] <- paste("FT", colnames(data_merge)[startcol:ncol(data_merge)], sep = "")
+```
+
+```{r}
+# anova_values <- colnames(data_merge)[15:ncol(data_merge)]
+# 
+# for(i in 14:ncol(data_merge)) {      
+#   # anova_values[i-13] <- 
+#     aov(get(colnames(data_merge)[i]) ~ strain_treatment, data = data_merge)
+# }
+# 
+# 
+# get(colnames(data_merge)[15])
+```
+
+
+#Boxplot
+```{r}
+
+data_merge$wk <- as.factor(data_merge$wk)
+data_merge$wk <- factor(data_merge$wk,
+    levels = c('Blk','Std','QC','8','24','52-56'),ordered = TRUE)
+
+plot <- data_merge %>%
+  dplyr::filter(data_merge$type == "sample") %>%
+  ggplot(aes_string(x="strain_treatment", y=paste0(plot_ft),fill="strain_treatment")) + 
+  geom_boxplot() + labs(x="Week",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
+plot
+
+plot <- data_merge %>%
+  dplyr::filter(data_merge$type == "sample") %>%
+  ggplot(aes_string(x="wk", y=paste0(plot_ft),fill="strain_treatment")) + 
+  geom_boxplot() + labs(x="Week",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
+plot
+# 
+# ggsave(file=paste0(plot_ft, '.svg'), plot=last_plot())
+```
+#Check for normality of groups using Shapiro-Wilks (optimize this)
+```{r}
+#Check Normality: p > 0.05 = normal (usa one-way anova); p < 0.05 = not normal (use kruskal wallis)
+
+#Week 8
+wk8_merge <- data_merge %>%
+  dplyr::filter(data_merge$wk == "8")
+wk8_merge <- wk8_merge %>%
+  split(.,wk8_merge$strain_treatment)
+shapiro.test(wk8_merge[["Tg_Bf"]][[plot_ft]])
+shapiro.test(wk8_merge[["Tg_Ctrl"]][[plot_ft]])
+shapiro.test(wk8_merge[["WT_Ctrl"]][[plot_ft]])
+shapiro.test(wk8_merge[["WT_Bf"]][[plot_ft]])
+
+#Week 24
+wk24_merge <- data_merge %>%
+  dplyr::filter(data_merge$wk == "24")
+wk24_merge <- wk24_merge %>%
+  split(.,wk24_merge$strain_treatment)
+shapiro.test(wk24_merge[["Tg_Bf"]][[plot_ft]])
+shapiro.test(wk24_merge[["Tg_Ctrl"]][[plot_ft]])
+shapiro.test(wk24_merge[["WT_Ctrl"]][[plot_ft]])
+shapiro.test(wk24_merge[["WT_Bf"]][[plot_ft]])
+
+#Week 52-56
+wk52_merge <- data_merge %>%
+  dplyr::filter(data_merge$wk == "52-56")
+wk52_merge <- wk52_merge %>%
+  split(.,wk52_merge$strain_treatment)
+shapiro.test(wk52_merge[["Tg_Bf"]][[plot_ft]])
+shapiro.test(wk52_merge[["Tg_Ctrl"]][[plot_ft]])
+shapiro.test(wk52_merge[["WT_Ctrl"]][[plot_ft]])
+shapiro.test(wk52_merge[["WT_Bf"]][[plot_ft]])
+```
+
+#Boxplot + Kruskal Wallis P-value (optimize this)
+```{r}
+#Week 8
+wk8 <- data_merge %>%
+  dplyr::filter(data_merge$wk == "8")
+wk8_kruskal <- kruskal.test(get(plot_ft) ~ strain_treatment, data = wk8)
+if (wk8_kruskal[["p.value"]] < 0.001) {
+  wk8_p = "< 0.001"
+}else if(wk8_kruskal[["p.value"]] < 0.05) {
+  wk8_p = round(wk8_kruskal[["p.value"]], digits = 3)
+}else{wk8_p = "NS"}
+
+#Week 24
+wk24 <- data_merge %>%
+  dplyr::filter(data_merge$wk == "24")
+
+wk24_kruskal <- kruskal.test(get(plot_ft) ~ strain_treatment, data = wk24)
+if (wk24_kruskal[["p.value"]] < 0.001) {
+  wk24_p = "< 0.001"
+}else if(wk24_kruskal[["p.value"]] < 0.05) {
+  wk24_p = round(wk24_kruskal[["p.value"]], digits = 3)
+}else{wk24_p = "NS"}
+
+#Week 24
+wk52 <- data_merge %>%
+  dplyr::filter(data_merge$wk == "52-56")
+
+wk52_kruskal <- kruskal.test(get(plot_ft) ~ strain_treatment, data = wk52)
+if (wk52_kruskal[["p.value"]] < 0.001) {
+  wk52_p = "< 0.001"
+}else if(wk52_kruskal[["p.value"]] < 0.05) {
+  wk52_p = round(wk52_kruskal[["p.value"]], digits = 3)
+}else{wk52_p = "NS"}
+
+pval_label1 <- grobTree(textGrob(paste0("P-value:",wk8_p), x=0.01,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+pval_label2 <- grobTree(textGrob(paste0("P-value:",wk24_p), x=0.4,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+pval_label3 <- grobTree(textGrob(paste0("P-value:",wk52_p), x=0.75,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+box_labeled <- plot + annotation_custom(pval_label1) + annotation_custom(pval_label2) + annotation_custom(pval_label3)
+box_labeled
+ggsave(file=paste0(plot_title,"_kruskal",".svg"), plot=box_labeled)
+```
+#Boxplot + ANOVA P-value (optimize this)
+```{r}
+#Week 8
+wk8 <- data_merge %>%
+  dplyr::filter(data_merge$wk == "8")
+
+wk8_aov <- aov(get(plot_ft) ~ strain_treatment, data = wk8)
+wk8_aov <- summary(wk8_aov)
+if (wk8_aov[[1]][["Pr(>F)"]][1] < 0.001) {
+  wk8_p = "< 0.001"
+}else if(wk8_aov[[1]][["Pr(>F)"]][1] < 0.05) {
+  wk8_p = round(wk8_aov[[1]][["Pr(>F)"]][1], digits = 3)
+}else{wk8_p = "NS"}
+
+
+
+# anova_values <- colnames(wk8)[15:ncol(wk8)]
+# anova_values <- as.list(anova_values)
+# 
+# for(i in 15:ncol(wk8)) {
+#   anova_values[[i-14]] <- summary(aov(get(colnames(wk8)[i]) ~ strain_treatment, data = wk8))
+# }
+# anova_p_values <- 15:ncol(wk8)
+# for(i in 1:13611) {
+# anova_p_values[i] <- anova_values[[i]][[1]][["Pr(>F)"]][1]
+# }
+# aov(get(colnames(wk8)[i]) ~ strain_treatment, data = wk8)
+
+#Week 24
+wk24 <- data_merge %>%
+  dplyr::filter(data_merge$wk == "24")
+
+wk24_aov <- aov(get(plot_ft) ~ strain_treatment, data = wk24)
+wk24_aov <- summary(wk24_aov)
+if (wk24_aov[[1]][["Pr(>F)"]][1] < 0.001) {
+  wk24_p = "< 0.001"
+}else if(wk24_aov[[1]][["Pr(>F)"]][1] < 0.05) {
+  wk24_p = round(wk24_aov[[1]][["Pr(>F)"]][1], digits = 3)
+}else{wk24_p = "NS"}
+
+#Week 52-56
+wk52 <- data_merge %>%
+  dplyr::filter(data_merge$wk == "52-56")
+
+wk52_aov <- aov(get(plot_ft) ~ strain_treatment, data = wk52)
+wk52_aov <- summary(wk52_aov)
+if (wk52_aov[[1]][["Pr(>F)"]][1] < 0.001) {
+  wk52_p = "< 0.001"
+}else if(wk52_aov[[1]][["Pr(>F)"]][1] < 0.05) {
+  wk52_p = round(wk52_aov[[1]][["Pr(>F)"]][1], digits = 3)
+}else{wk52_p = "NS"}
+# 
+# anova_values <- colnames(data_merge)[15:ncol(data_merge)]
+# anova_values <- as.list(anova_values)
+# 
+# for(i in 15:ncol(data_merge)) {
+#   anova_values[[i]] <- aov(get(colnames(data_merge)[i]) ~ strain_treatment, data = data_merge)
+# }
+
+#
+# get(colnames(data_merge)[15])
+#
+
+
+pval_label1 <- grobTree(textGrob(paste0("P-value:",wk8_p), x=0.01,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+pval_label2 <- grobTree(textGrob(paste0("P-value:",wk24_p), x=0.4,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+pval_label3 <- grobTree(textGrob(paste0("P-value:",wk52_p), x=0.75,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+box_labeled <- plot + annotation_custom(pval_label1) + annotation_custom(pval_label2) + annotation_custom(pval_label3)
+box_labeled
+ggsave(file=paste0(plot_title,"_anova",".svg"), plot=box_labeled)
+
+```
+
+
+
+
+
+#Individual timepoint
+```{r}
+#Week 8
+plot <- data_merge %>%
+  dplyr::filter(data_merge$wk == "8") %>%
+  ggplot(aes_string(x="wk", y=paste0(plot_ft),fill="strain_treatment")) + 
+  geom_boxplot() + labs(x="Week",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
+plot
+
+
+wk8_label <- grobTree(textGrob(paste0("P-value:",wk8_p), x=0.08,  y=0.98, hjust=0,
+                                gp=gpar(col="black", fontsize=13)))
+wk8_box_labeled <- plot + annotation_custom(wk8_label)
+wk8_box_labeled
+ggsave(file=paste0(plot_title,"wk8",".svg"), plot=wk8_box_labeled)
+```
