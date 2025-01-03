@@ -1,0 +1,205 @@
+---
+title: "Fecal_IntStd_Plot"
+author: "Olivia Schwartz"
+date: "2024-10-24"
+output: html_document
+---
+```{r}
+#Libraries
+library(tidyverse)
+library(ggplot2)
+```
+#File inputs
+```{r}
+# (1) Quant table (.csv)
+#     As produced by mzmine
+# (2) Metadata (.csv)
+#     1st col: file names
+# (3) Features to plot (.csv)
+#     ID,  mz,  RT
+quant_table <- read.csv("quant_intstd_batch_corrected.csv", sep = ",") #mzmine output
+metadata <- read.csv('10162024_NAU_ATA_metadata_typetimepoints.csv', header = T, check.names = F, sep = ",")
+compound_list <-read.csv('fecal_int_std_batchcorrect.csv', sep = ",") #List of features to plot
+```
+#Changing naming in data frames
+```{r}
+#Metadata
+colnames(metadata)<-gsub("ATTRIBUTE_","",colnames(metadata)) #Remove "ATTRIBUTE_"
+colnames(metadata)[1] <- "filename"
+#Feature Table
+colnames(quant_table)<-gsub(".Peak.area","",colnames(quant_table)) #Remove ".Peak.area." 
+colnames(quant_table)[1] <- "ID"
+quant_table <- quant_table[-c(4:13)] #Retain only ID, mz, RT
+#Compound list
+colnames(compound_list)[1] <- "ID"
+```
+#Setting up features of interest for plotting
+```{r}
+
+quant_Std <- t(quant_table)
+quant_Std <- as.data.frame(quant_Std)
+colnames(quant_Std) <- quant_Std[1,]
+
+filename <- row.names(quant_Std)
+quant_Std <- cbind(filename, quant_Std)
+test <- quant_Std[-1,]
+data_merge <- inner_join(metadata, quant_Std)
+
+#Extract features from quant table
+# quant_table_feat <- quant_table[quant_table$ID %in% compound_list$ID, ]
+# 
+# 
+# 
+# feat_sums <- quant_table_feat %>%
+#   pivot_longer(cols =-ID) %>%
+#   mutate(value = factor(value)) %>%
+#   dplyr::count(name, value) %>%
+#   pivot_wider(
+#     id_cols = value, names_from = name, values_from = n,
+#     values_fill = 0L) %>%
+#    mutate(across(starts_with("Q"), ~ 100 * . / sum(.)))
+# 
+# feat_sums %>%
+#   filter(ID %in% c(4:ncol(quant_table_feat))) 
+# 
+# %>%
+#   summarize(ID = "Sum", across(c(4:ncol(quant_table_feat), sum))) %>%
+#   bind_rows(feat_sums, .)
+# 
+# 
+# 
+# 
+# quant_table_feat <- t(quant_table_feat)
+# 
+# 
+# quant_table_feat <- as.data.frame(quant_table_feat)
+# colnames(quant_table_feat) <- quant_table_feat[1,]
+# quant_table_feat <- quant_table_feat[-1,]
+# quant_table_feat <- quant_table_feat[-1,]
+# filename <- row.names(quant_table_feat)
+# quant_table_feat <- cbind(filename, quant_table_feat)
+# 
+# new_colnames <- as.character(quant_table_feat[1, ])
+# quant_table_feat$filename <- row.names(quant_table_feat)
+
+#Combine features that are the same metabolite, sum those rows
+
+```
+
+```{r}
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(14), as.numeric)
+data_merge$ID <- gsub(".mzML","",data_merge$ID)
+data_merge$ID <- gsub("(SP)([0-9])_","",data_merge$ID)
+data_merge$filename <- gsub("SP","",data_merge$filename)
+```
+
+```{r}
+
+# dplyr::filter(data_merge$type == "standard")
+std_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "standard") %>%
+  ggplot() + geom_point(color="purple",aes(x = filename, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in Standards (mzmine quant table)") + labs(x="Standards",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+std_plot
+# 
+ggsave(file=paste0("std_batchcorrect.svg"), plot=last_plot())
+```
+```{r}
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(2), as.numeric)
+
+blk_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "blank") %>%
+  ggplot() + geom_point(color="blue",aes(x = Type_Timepoint, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in Blank (mzmine quant table)") + labs(x="Blank Timepoint",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+blk_plot
+# 
+ggsave(file=paste0("blk.svg"), plot=last_plot())
+```
+
+```{r}
+sample_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "sample") %>%
+  ggplot() + geom_point(color="orange",aes(x = Type_Timepoint, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in Samples (mzmine quant table)") + labs(x="Sample Timepoint",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+sample_plot
+# 
+ggsave(file=paste0("sample_batchcorrect.svg"), plot=last_plot())
+```
+
+```{r}
+qc_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "QC") %>%
+  ggplot() + geom_point(color="black",aes(x = Type_Timepoint, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in QC mixes (mzmine quant table)") + labs(x="QC Timepoint",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+qc_plot
+# 
+ggsave(file=paste0("qc.svg"), plot=last_plot())
+```
+#Normalized
+```{r}
+norm_quant <- read.csv(file="Normalised_Quant_table_intstd_batchcorrect.csv")
+
+quant_Std <- t(norm_quant)
+quant_Std <- as.data.frame(quant_Std)
+colnames(quant_Std) <- quant_Std[1,]
+
+filename <- row.names(quant_Std)
+quant_Std <- cbind(filename, quant_Std)
+test <- quant_Std[-1,]
+data_merge <- inner_join(metadata, quant_Std)
+```
+
+
+```{r}
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(14), as.numeric)
+data_merge$ID <- gsub(".mzML","",data_merge$ID)
+data_merge$ID <- gsub("(SP)([0-9])_","",data_merge$ID)
+data_merge$filename <- gsub("SP","",data_merge$filename)
+```
+
+```{r}
+
+# dplyr::filter(data_merge$type == "standard")
+std_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "standard") %>%
+  ggplot() + geom_point(color="purple",aes(x = filename, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in Standards (normalized quant table)") + labs(x="Standards",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+std_plot
+# 
+ggsave(file=paste0("std_norm.svg"), plot=last_plot())
+```
+
+```{r}
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(2), as.numeric)
+
+blk_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "blank") %>%
+  ggplot() + geom_point(color="blue",aes(x = Type_Timepoint, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in Blank (mzmine quant table)") + labs(x="Blank Timepoint",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+blk_plot
+# 
+ggsave(file=paste0("blk.svg"), plot=last_plot())
+```
+
+```{r}
+sample_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "sample") %>%
+  ggplot() + geom_point(color="orange",aes(x = Type_Timepoint, y = Sulfadimethoxine))  + 
+  ggtitle("Sulfadimethoxine Abundance in Samples (norm. quant table) batch corrected log scale") + 
+  labs(x="Sample Timepoint",y="Abundance") + 
+  theme(axis.text.x = element_text(angle = 90, hjust=1))   + scale_y_continuous(trans = "log2")
+sample_plot
+# 
+ggsave(file=paste0("sample_norm_instd_log_batchcorrect.svg"), plot=last_plot())
+```
+
+```{r}
+qc_plot <- data_merge %>% 
+  dplyr::filter(data_merge$type == "QC") %>%
+  ggplot() + geom_point(color="black",aes(x = Type_Timepoint, y = Sulfadimethoxine))  + ggtitle("Sulfadimethoxine Abundance in QC mixes (mzmine quant table)") + labs(x="QC Timepoint",y="Abundance") + theme(axis.text.x = element_text(angle = 90, hjust=1)) 
+qc_plot
+# 
+ggsave(file=paste0("qc_norm.svg"), plot=last_plot())
+```

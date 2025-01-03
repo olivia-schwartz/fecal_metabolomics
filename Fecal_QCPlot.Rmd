@@ -1,0 +1,82 @@
+---
+title: "QC_Plot"
+author: "Olivia Schwartz"
+date: "2024-10-23"
+output: html_document
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+#Inputs
+# (1) Quant table (.csv) --containing only features of QC
+# (2) Metadata (.csv) -- contains only QC
+quant_table <- read.csv("quant_features_only.csv", sep = ",") #mzmine output
+metadata <- read.csv('10162024_NAU_ATA_metadata_QC.csv', header = T, check.names = F, sep = ",")
+
+
+colnames(metadata)<-gsub("ATTRIBUTE_","",colnames(metadata)) #Remove "ATTRIBUTE_"
+colnames(metadata)[1] <- "filename"
+colnames(quant_table)<-gsub(".Peak.area","",colnames(quant_table)) #Remove ".Peak.area."
+```
+
+```{r}
+#Pull out QC samples from feature table
+QC_names <- grep("QC", names(quant_table), value = TRUE)
+quant_QC <- quant_table[, c(names(quant_table)[1:2],QC_names)]
+colnames(quant_QC)
+rm(quant_table, QC_names)
+
+```
+```{r}
+quant_QC <- t(quant_table)
+quant_QC <- as.data.frame(quant_QC)
+colnames(quant_QC) <- quant_QC[1,]
+quant_QC <- quant_QC[-1,]
+filename <- row.names(quant_QC)
+quant_QC <- cbind(filename, quant_QC)
+
+new_colnames <- as.character(quant_QC[1, ])
+quant_QC$filename <- row.names(quant_QC)
+
+data_merge <- inner_join(metadata, quant_QC)
+
+```
+
+```{r}
+
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(3:ncol(data_merge)), as.numeric)
+
+QC_names <- colnames(data_merge[3:ncol(data_merge)])
+ggplot(data_merge, aes(Timepoint)) + 
+  geom_point(color="purple",aes(y = `279.09`))  + ggtitle("QC1") + labs(x="QC Sample",y="Abundance")+ scale_x_continuous(breaks = seq(1:31))
+ggsave(file=paste0("QC1.svg"), plot=last_plot())
+```
+```{r}
+ggplot(data_merge, aes(Timepoint)) + 
+  geom_point(color="blue",aes(y = `271.03`))  + ggtitle("QC2") + labs(x="QC Sample",y="Abundance")+ scale_x_continuous(breaks = seq(1:31))
+ggsave(file=paste0("QC2.svg"), plot=last_plot())
+```
+```{r}
+ggplot(data_merge, aes(Timepoint)) + 
+  geom_point(color="darkgreen",aes(y = `285.02`))  + ggtitle("QC3") + labs(x="QC Sample",y="Abundance") + scale_x_continuous(breaks = seq(1:31))
+ggsave(file=paste0("QC3.svg"), plot=last_plot())
+```
+
+```{r}
+ggplot(data_merge, aes(Timepoint)) + 
+  geom_point(color="red",aes(y = `311.08`))  + ggtitle("QC4") + labs(x="QC Sample",y="Abundance") + scale_x_continuous(breaks = seq(1:31))
+ggsave(file=paste0("QC4.svg"), plot=last_plot())
+```
+
+```{r}
+ggplot(data_merge, aes(Timepoint)) + 
+  geom_point(color="darkred",aes(y = `278.19`))  + ggtitle("QC5") + labs(x="QC Sample",y="Abundance") + scale_x_continuous(breaks = seq(1:31))
+ggsave(file=paste0("QC5.svg"), plot=last_plot())
+```
