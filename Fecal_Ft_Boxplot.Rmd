@@ -25,9 +25,15 @@ library(rlang)
 
 quant_table <- read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250107_iimn_gnps_quant.csv", sep = ",") #mzmine output
 metadata <- read.csv('C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250106_NAU_HILIC_md.csv', header = T, check.names = F, sep = ",")
-plot_ft <- "FT12262"
-plot_title <- plot_ft
+plot_ft <- "FT11775"
+attribute_1 <- "Sample_Type"
+condition_1 <- "Hippocampus"
+attribute_2 <- "Isotope"
+condition_2 <- "18O"
+plot_title <- paste0(plot_ft," ",condition_1," ",condition_2)
 ```
+
+ 
 #Changing naming in data frames
 ```{r}
 #Metadata
@@ -86,19 +92,25 @@ data_merge$Wk <- as.factor(data_merge$Wk)
 data_merge$Wk <- factor(data_merge$Wk,
     levels = c('Blank','Standard','8','24','52-56'),ordered = TRUE)
 
+# plot <- data_merge %>%
+#   dplyr::filter(data_merge$Sample_Type == "FrontalCortex" & data_merge$Isotope == "16O") %>%
+#   ggplot(aes_string(x="Injection_Order", y=paste0(plot_ft),fill="Strain_Treatment")) + 
+#   geom_boxplot() + labs(x="Injection_Order",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
+# plot
+# 
 plot <- data_merge %>%
-  dplyr::filter(data_merge$Sample_Type == "FrontalCortex" & data_merge$Isotope == "16O") %>%
-  ggplot(aes_string(x="Strain_Treatment", y=paste0(plot_ft),fill="Strain_Treatment")) + 
-  geom_boxplot() + labs(x="Week",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
-plot
-
-plot <- data_merge %>%
-  dplyr::filter(data_merge$Sample_Type == "FrontalCortex"& data_merge$Isotope == "16O") %>%
-  ggplot(aes_string(x="Wk", y=paste0(plot_ft),fill="Strain_Treatment")) + 
+  dplyr::filter(data_merge[[attribute_1]] == paste0(condition_1) & data_merge[[attribute_2]] == paste0(condition_2)) %>%
+  ggplot(aes_string(x="Wk", y=paste0(plot_ft),fill="Strain_Treatment")) +
   geom_boxplot() + labs(x="Week",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
 plot
 # 
-# ggsave(file=paste0(plot_ft, '.svg'), plot=last_plot())
+# Internal Standard
+# plot <- data_merge %>%
+#   ggplot(aes_string(x="Injection_Order", y=paste0(plot_ft),color="Sample_Type")) +
+#   geom_point() + labs(x="Week",y="Abundance",title=paste0(plot_title)) + scale_fill_viridis(discrete = TRUE, option = "viridis")
+# plot
+# 
+ggsave(file=paste0('C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/',plot_title,'.svg'), plot=last_plot())
 ```
 #Check for normality of groups using Shapiro-Wilks (optimize this)
 ```{r}
