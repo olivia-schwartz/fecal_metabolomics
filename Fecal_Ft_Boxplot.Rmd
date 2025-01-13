@@ -23,17 +23,19 @@ library(rlang)
 # (2) Metadata (.csv)
 #     1st col: file names
 
-quant_table <- read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/Hippocampus_Run/2025.01.13_Hip_quant.csv", sep = ",") #mzmine output
+quant_table <- read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/Hippocampus_Run/2025.01.13_Hip_quant.csv", sep = ",")
 metadata <- read.csv('C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/Hippocampus_Run/20250106_NAU_HILIC_Hip_md.csv', header = T, check.names = F, sep = ",")
 
-plot_ft <- "FT2458"
+plot_ft <- "FT2458" #feature ID preceded by "FT" (ie. "FT1234")
 
-attribute_1 <- "Sample_Type"
-condition_1 <- "Hippocampus"
+#Data filters
+attribute_1 <- "Sample_Type" #column name
+condition_1 <- "Hippocampus" #value to keep
 
-attribute_2 <- "Isotope"
-condition_2 <- "16O"
+attribute_2 <- "Isotope"     #column name
+condition_2 <- "16O"         #value to keep
 
+#Output names/folder
 plot_title <- paste0("Hippocampus_set_",plot_ft," ",condition_1," ",condition_2)
 output_folder <- "C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/Hippocampus_Run"
 ```
