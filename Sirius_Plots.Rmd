@@ -1,0 +1,123 @@
+
+title: "Sirius_Plots"
+output: html_document
+date: "2025-02-03"
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(viridis)
+library(reshape2)
+library('data.table')
+```
+#Inputs
+```{r}
+
+quant_table <- read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250107_iimn_gnps_quant.csv", sep = ",")
+metadata <- read.csv('C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250106_NAU_HILIC_md.csv', header = T, check.names = F, sep = ",")
+summary<-read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/canopus_formula_summary.csv", header = TRUE)
+
+summary_attribute <- "ClassyFire.level.5"
+md_attribute <- "Strain_Treatment"
+
+filter1_col <- "Isotope"
+filter1_value <-"16O"
+
+filter2_col <-"Sample_Type"
+filter2_value <- "Hippocampus"
+filter3_value <- "52-56"
+plot_title <- paste0(filter1_value,'_',filter2_value,'_',filter3_value)
+```
+
+#need to merge metadata + feat table
+
+#Changing naming in data frames
+```{r}
+#Metadata
+colnames(metadata)<-gsub("ATTRIBUTE_","",colnames(metadata)) #Remove "ATTRIBUTE_"
+colnames(metadata)[1] <- "filename"
+#Feature Table
+colnames(quant_table)<-gsub(".Peak.area","",colnames(quant_table)) #Remove ".Peak.area." 
+colnames(quant_table)[1] <- "row.ID"
+quant_table <- quant_table[-c(4:13)] #Retain only ID, mz, RT
+colnames(quant_table)[2] <- "mz"
+colnames(quant_table)[3] <- "rt"
+
+#QC-Do file names match?
+setdiff(metadata$filename, colnames(quant_table))
+setdiff(colnames(quant_table), metadata$filename)
+```
+#Test
+```{r}
+quant_table <- quant_table[, -c(2, 3)] #Removing rt and mz columns
+sirius_classes <- summary[, c("row.ID", paste0(summary_attribute))] #Extract only the wanted attribute and IDs from SIRIUS table
+rm(summary)
+#Merge quant and SIRIUS tables
+quant_class <- merge(quant_table, sirius_classes, by = "row.ID")
+merged_df_cols <- c(colnames(quant_class)[1], paste0(summary_attribute), colnames(quant_class)[2:ncol(quant_table)])
+quant_class <- quant_class[, merged_df_cols]
+rm(merged_df_cols)
+
+
+#Aggregate matching classes
+quant_sum <- quant_class %>% 
+    type.convert(as.is=TRUE) %>% 
+    group_by(get(summary_attribute)) %>% 
+   summarise(across(colnames(quant_class)[3:ncol(quant_class)], sum))
+quant_sum <- as.data.frame(quant_sum)
+quant_sum[1, ] <- colnames(quant_sum)
+colnames(quant_sum) <- NULL
+quant_sum <- t(quant_sum)
+colnames(quant_sum) <- quant_sum[1, ]
+quant_sum <- quant_sum[-1, ]
+colnames(quant_sum)[1] <- "filename"
+
+rownames(quant_sum) <- quant_sum[,1]
+quant_sum <- quant_sum[,-1]
+#Reformat
+quant_sum_melt <- melt(quant_sum)
+colnames(quant_sum_melt)[1] <- "filename"
+colnames(quant_sum_melt)[2] <- paste0(summary_attribute)
+
+#Merge wanted metadata attribute with the summed classes
+metadata_condition <- metadata[, c("filename", paste0(md_attribute))]
+class_plot_table <- merge(quant_sum_melt, metadata, by = "filename")
+
+#Filter to metadata of interest
+class_plot_table <- class_plot_table %>%
+    dplyr::filter(class_plot_table[[filter1_col]] == paste0(filter1_value) & class_plot_table[[filter2_col]] == paste0(filter2_value) & class_plot_table$Wk == "52-56")
+
+```
+
+#Calculate proportions
+```{r}
+class_plot_table <- as.data.table(class_plot_table)
+class_plot_table$value <- as.numeric(class_plot_table$value)
+class_plot_table[, percent := prop.table(value)*100, by=eval((paste0(md_attribute)))]
+dim(class_plot_table)
+```
+
+#Filters
+```{r}
+#Filter out small percentages
+class_plot_table_filter <- as.data.frame(class_plot_table) %>%
+  dplyr::filter(percent > 5)
+
+filtered_proportions <- class_plot_table %>%
+  anti_join(class_plot_table_filter)
+filtered_proportions$ClassyFire.level.5 <- "Other"
+
+class_plot_table <- rbind(class_plot_table_filter, filtered_proportions)
+```
+
+#Plot
+```{r}
+class_plot_table <- as.data.table(class_plot_table)
+
+ggplot(data = class_plot_table, aes( x = get(md_attribute), y = percent, fill = get(summary_attribute), label = value )) + 
+  geom_bar(stat = 'identity') + ggtitle("Title") + scale_fill_viridis(discrete = TRUE, option = "viridis") + labs(x=paste0(md_attribute),title = paste0(plot_title))
+
+```
+
+
