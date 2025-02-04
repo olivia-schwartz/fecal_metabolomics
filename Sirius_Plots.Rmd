@@ -18,16 +18,20 @@ quant_table <- read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denve
 metadata <- read.csv('C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250106_NAU_HILIC_md.csv', header = T, check.names = F, sep = ",")
 summary<-read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/canopus_formula_summary.csv", header = TRUE)
 
+output_folder <- "C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/"
+
 summary_attribute <- "ClassyFire.level.5"
-md_attribute <- "Strain_Treatment"
+md_attribute <- "Treatment"
 
 filter1_col <- "Isotope"
 filter1_value <-"16O"
-
 filter2_col <-"Sample_Type"
-filter2_value <- "Hippocampus"
+filter2_value <- "FrontalCortex"
+filter3_col <- "Wk"
 filter3_value <- "52-56"
 plot_title <- paste0(filter1_value,'_',filter2_value,'_',filter3_value)
+
+percent_threshold <- 0.5
 ```
 
 #need to merge metadata + feat table
@@ -86,7 +90,7 @@ class_plot_table <- merge(quant_sum_melt, metadata, by = "filename")
 
 #Filter to metadata of interest
 class_plot_table <- class_plot_table %>%
-    dplyr::filter(class_plot_table[[filter1_col]] == paste0(filter1_value) & class_plot_table[[filter2_col]] == paste0(filter2_value) & class_plot_table$Wk == "52-56")
+    dplyr::filter(class_plot_table[[filter1_col]] == paste0(filter1_value) & class_plot_table[[filter2_col]] == paste0(filter2_value) & class_plot_table[[filter3_col]] == paste0(filter3_value))
 
 ```
 
@@ -102,7 +106,7 @@ dim(class_plot_table)
 ```{r}
 #Filter out small percentages
 class_plot_table_filter <- as.data.frame(class_plot_table) %>%
-  dplyr::filter(percent > 5)
+  dplyr::filter(percent > percent_threshold)
 
 filtered_proportions <- class_plot_table %>%
   anti_join(class_plot_table_filter)
@@ -117,6 +121,8 @@ class_plot_table <- as.data.table(class_plot_table)
 
 ggplot(data = class_plot_table, aes( x = get(md_attribute), y = percent, fill = get(summary_attribute), label = value )) + 
   geom_bar(stat = 'identity') + ggtitle("Title") + scale_fill_viridis(discrete = TRUE, option = "viridis") + labs(x=paste0(md_attribute),title = paste0(plot_title))
+
+ggsave(paste0(output_folder,plot_title,".svg"), plot=last_plot())
 
 ```
 
