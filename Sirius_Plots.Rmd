@@ -13,6 +13,9 @@ library('data.table')
 ```
 #Inputs
 ```{r}
+# (1) quant table formatted from mzmine output (.csv)
+# (2) metadata (.csv)
+# (3) Canopus summary files with ID column named "row.ID" (.csv)
 
 quant_table <- read.csv("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250107_iimn_gnps_quant.csv", sep = ",")
 metadata <- read.csv('C:/Users/Olivia.Schwartz/OneDrive - University of Denver/DU/Aron Lab/Experiments/20250106_NAU_HILIC/mzmine/20250106_NAU_HILIC_md.csv', header = T, check.names = F, sep = ",")
