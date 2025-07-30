@@ -1,0 +1,285 @@
+---
+title: "Feature_Boxplot_Functions"
+author: "Olivia Schwartz"
+date: "2025-07-"
+output: html_document
+# Run all: ctrl-alt-R / cmd-opt-R
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+library(ggplot2)
+library("ggpubr")
+library(viridis) #Color-blind accessible palettes
+library(RColorBrewer)
+library(purrr)
+library(rlang)
+library(scales) #Scientific notation axis 
+library(matrixStats)
+library(FSA)
+```
+
+#Inputs
+```{r}
+# File Inputs
+# (1) Quant table (.csv)
+#     As produced by mzmine
+# (2) Metadata (.csv)
+#     1st col: file names
+# (3) Features to plot (.csv)
+#     1st col: feature IDs
+
+directory <- "C:/Users/Olivia.Schwartz/OneDrive - University of Denver/Projects/Alzheimers NAU/202504_HILIC_IntStd_Runs/Fecal/"
+quant_table <- read.csv(paste(directory,"processed_batchc16_c18/Normalized_formatted.csv",sep=""), sep = ",") #mzmine output
+metadata <- read.csv(paste(directory,"2025_HILIC_Fec_md.csv",sep=""), header = T, check.names = F, sep = ",")
+plot_ft <- read.csv(paste(directory,"FBMNStats/Kruskal_16O_Wk52_Strain_Treatment_Top.csv",sep=""))
+
+#Plot Details
+plot_title <- "HILIC Fec"
+plot_x_lab <- "Strain_Treatment"
+color_lab <- "Strain_Treatment"
+pwc_test2 <- "Strain" #Secondary wilcox test group, set to NA if not needed
+
+#Data filters
+#Set unused filters to NA
+#Attribute = Column name
+#Condition = value to keep after filtering
+attribute_1 <- "Isotope"
+condition_1 <- "16O"
+
+attribute_2 <- "Wk"
+condition_2 <- "52-56"
+
+attribute_3 <- NA
+condition_3 <- NA
+
+```
+
+#Functions
+```{r}
+#Output and save distribution plots
+norm_function <- function(feature_data_table,feature) {
+  hist(feature_data_table[[feature]], xlab=paste(feature), main=paste(plot_title,"Histogram"))
+  ggsave(file=paste("Hist_",feature,".svg",sep=""), plot=last_plot())
+  
+  qqnorm(feature_data_table[[feature]],main=paste(plot_title,"Q-Q"))
+  qqline(feature_data_table[[feature]], col = "blue") #add the line with theoretic normal distribution
+  ggsave(file=paste("QQ_",feature,".svg",sep=""), plot=last_plot())
+}
+
+#Output appropriate symbol for a given p-value
+pval_to_symbol <- function(pval) {
+    if (pval < 0.001) {
+    return("***")
+  } else if (pval < 0.01) {
+    return("**")
+  } else if (pval < 0.05) {
+    return("*")
+  } else {
+    return("ns")
+  }
+}
+
+```
+
+
+#Changing naming in data frames
+```{r}
+#Setting up features for plotting
+colnames(plot_ft)[1] <- "row ID"
+plot_ft <- as.character(plot_ft$`row ID`)
+plot_ft <- paste0("FT", plot_ft)
+
+#Metadata
+colnames(metadata)<-gsub("ATTRIBUTE_","",colnames(metadata)) #Remove "ATTRIBUTE_"
+colnames(metadata)[1] <- "filename"
+#Feature Table
+colnames(quant_table)<-gsub(".Peak.area","",colnames(quant_table)) #Remove ".Peak.area." 
+colnames(quant_table)[1] <- "ID"
+quant_table <- quant_table[-c(4:13)] #Retain only ID, mz, RT
+colnames(quant_table)[2] <- "mz"
+colnames(quant_table)[3] <- "rt"
+
+#First output (any output means those filenames are missing from the quant table)
+#Second output any output missing from metadata table
+setdiff(metadata$filename, colnames(quant_table))
+setdiff(colnames(quant_table), metadata$filename)
+```
+
+#Merging feature IDs with metadata for plotting
+```{r}
+
+quant_ft <- t(quant_table)
+quant_ft <- as.data.frame(quant_ft)
+colnames(quant_ft) <- quant_ft[1,]
+
+filename <- row.names(quant_ft)
+quant_ft <- cbind(filename, quant_ft)
+quant_ft <- quant_ft[-c(1:3), ]   
+data_merge <- inner_join(metadata, quant_ft)
+```
+
+#Setting up merged data for plotting
+```{r}
+data_merge <- data_merge %>% 
+  as.data.frame() %>% 
+  mutate_at(c(ncol(metadata)+1), as.numeric)
+
+startcol <- ncol(metadata)+1
+colnames(data_merge)[startcol:ncol(data_merge)] <- paste("FT", colnames(data_merge)[startcol:ncol(data_merge)], sep = "")
+```
+
+
+
+#Filter
+```{r}
+data_merge <- as.data.frame(data_merge)
+
+# No filter
+if (is.na(attribute_1)) {
+
+} else if (is.na(attribute_2)) {
+# Filter 1 condition
+  data_merge <- data_merge %>%
+  dplyr::filter(data_merge[[attribute_1]] == condition_1)
+  plot_title <- paste(plot_title,condition_1,condition_2,condition_3)
+} else if (is.na(attribute_3)) {
+# Filter 2 conditions
+  data_merge <- data_merge %>%
+  dplyr::filter(data_merge[[attribute_1]] == condition_1 & data_merge[[attribute_2]] == condition_2)
+  plot_title <- paste(plot_title,condition_1,condition_2)
+} else {
+# Filter 3 conditions
+  data_merge <- data_merge %>%
+  dplyr::filter(data_merge[[attribute_1]] == condition_1 & data_merge[[attribute_2]] == condition_2 & data_merge[[attribute_3]] == condition_3)
+  plot_title <- paste(plot_title,condition_1,condition_2,condition_3)
+}
+
+# 
+# data_merge_ctrl <-  data_merge %>% dplyr::filter(data_merge$Treatment == "Ctrl")
+```
+
+#Normality Tests and Plots Function
+```{r}
+
+#Normality Tests Function
+#Generates 
+# (1) Histogram
+# (2) QQ Plot
+# (3) Shapiro Test Results
+
+#Interpreting Normality Results#
+#Histogram: bell curve indicates normality
+#QQ plot: alignment with blue line indicates normality
+#Shapiro: p-value >= 0.05 indicates normality
+
+#Empty vectors and dataframes
+hist_list <- list()
+shapiro_res <- list()
+shapiro_p <- data.frame(matrix(ncol = 2, nrow = length(plot_ft)))
+colnames(shapiro_p)[1] <- "Shapiro_p"
+colnames(shapiro_p)[2] <- "Shapiro_p_symb"
+
+#Loop through each feature to test for normal distribution
+for (i in 1:length(plot_ft)) {
+  norm_function(data_merge,plot_ft[i])
+  shapiro_res[[i]] <- shapiro.test(data_merge[[plot_ft[i]]])
+  rownames(shapiro_p)[i] <- plot_ft[i]
+  shapiro_p[i,1] <- round(shapiro_res[[i]][["p.value"]], digits=4)
+  shapiro_p[i,2] <- pval_to_symbol(shapiro_p[i,1])
+}
+
+
+```
+
+#Test for significance (Kruskal Wallis, Dunn's Test)
+```{r}
+#Empty Kruskal wallis objects
+krusk_res <- list()
+krusk_p <- data.frame(matrix(ncol = 2, nrow = length(plot_ft)))
+colnames(krusk_p)[1] <- "Krusk_p"
+colnames(krusk_p)[2] <- "Krusk_p_symb"
+
+#Empty dunn's test objects
+dunn_list <- list()
+dunn_res <- list()
+for (i in 1:length(plot_ft)) {
+  #Kruskal wallis
+  krusk_res[[i]] <- kruskal.test(data_merge[[plot_ft[i]]] ~ data_merge[[plot_x_lab]])
+  rownames(krusk_p)[i] <- plot_ft[i]
+  krusk_p[i,1] <- round(krusk_res[[i]][["p.value"]],digits =4)
+  krusk_p[i,2] <- pval_to_symbol(krusk_p[i,1])
+  
+  #Dunn's test
+  dunn_list[[i]] <- dunnTest((data_merge[[plot_ft[i]]]),as.factor(data_merge[[plot_x_lab]]),method = "bh")
+  dunn_res[[plot_ft[i]]] <- dunn_list[[1]][["res"]]
+  
+  #Adjusting Dunn's test results for plotting
+  dunn_res[[plot_ft[i]]] <- dunn_res[[plot_ft[i]]] %>%
+    separate(Comparison, into = c("group1", "group2"), sep = " - ")
+  dunn_res[[plot_ft[i]]]$y.position <- max(data_merge[[plot_ft[i]]])
+  
+  names(dunn_res[[plot_ft[i]]])[names(dunn_res[[plot_ft[i]]]) == "P.unadj"] <- "p"
+  names(dunn_res[[plot_ft[i]]])[names(dunn_res[[plot_ft[i]]]) == "P.adj"] <- "p.adj"
+  
+  for (r in 1:nrow(dunn_res[[plot_ft[i]]])) {
+
+  dunn_res[[plot_ft[i]]]$p.signif[r] <- pval_to_symbol(dunn_res[[plot_ft[i]]]$p.adj[r])
+  
+  factor <- 1+(r/5)
+  dunn_res[[plot_ft[i]]]$y.position[r] <- dunn_res[[plot_ft[i]]]$y.position[r]*factor
+  
+
+}
+}
+```
+
+#Test for significance (Mann Whitney)
+```{r}
+#Empty Mann whitney test objects
+# mann_whit_res <- list()
+# mann_whit_p <- data.frame(matrix(ncol = 2, nrow = length(plot_ft)))
+# colnames(mann_whit_p)[1] <- "MannWhit_p"
+# colnames(mann_whit_p)[2] <- "MannWhit_p_symb"
+# 
+# for (i in 1:length(plot_ft)) {
+#   pwc2_fml <- as.formula(paste(plot_ft[i],"~",pwc_test2))
+#   mann_whit_res[[i]] <- wilcox.test(pwc2_fml,
+#             data=data_merge_ctrl)
+#   mann_whit_p[i,1] <- round(mann_whit_res[[i]][["p.value"]], digits = 4)
+#   mann_whit_p[i,2] <- pval_to_symbol(mann_whit_p[i,1])
+#   rownames(mann_whit_p)[i] <- plot_ft[i]
+# }
+```
+
+
+#Boxplot with p-values
+```{r}
+
+boxplot_fun <- function(feature_data_table, feature, x_lab, y_lab,pair_compare_res, compare_all) {
+    ggboxplot(feature_data_table, x = x_lab, y = y_lab) +
+      stat_pvalue_manual(pair_compare_res,
+                       hide.ns = TRUE,label = "p.signif") +
+      geom_jitter(color="black", size=1.5) +
+      geom_boxplot(fill=c("#F68D2E","#E1523D","#4B9560","#407EC9")) +
+      scale_y_continuous(labels = scales::scientific) +
+      labs(title = paste(plot_title,feature),
+           y= paste("Normalized Abundance",feature),
+           subtitle = paste("Kruskal Wallis:",compare_all),
+           caption = "Pair-wise: Dunn's, P adjust: BH") +
+      theme(text = element_text(size = 16))
+
+  ggsave(file=paste("Box_",feature,plot_title,".svg",sep=""), plot=last_plot())
+}
+
+for (i in 1:length(plot_ft)) {
+  boxplot_fun(data_merge, plot_ft[i], plot_x_lab, plot_ft[i],dunn_res[[plot_ft[i]]], krusk_p[plot_ft[i], "Krusk_p"])
+}
+
+
+
+```
+
+
+
